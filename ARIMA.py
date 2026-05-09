@@ -1,5 +1,6 @@
 # ARIMA on MEMD IMFs (clean baseline)
 
+import os
 import numpy as np
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
@@ -237,6 +238,9 @@ def lstm_residual_forecast_rolling(
     output_horizon=1,
     return_horizon_matrix=False,
     rollout_horizon=None,
+    model_cache_path=None,
+    force_retrain_model=False,
+    save_trained_model=True,
 ):
     residual_train = np.asarray(residual_train, dtype=float)
     residual_test = np.asarray(residual_test, dtype=float)
@@ -257,15 +261,40 @@ def lstm_residual_forecast_rolling(
     X = np.array(X, dtype=float)
     y = np.array(y, dtype=float)
 
-    model = _build_residual_model(
-        model_type=model_type,
-        input_size=1,
-        hidden_size=hidden_size,
-        learning_rate=learning_rate,
-    )
-    for _ in range(epochs):
-        for i in range(len(X)):
-            model.train_step(X[i], y[i])
+    model = None
+    trained_now = False
+    model_key = str(model_type).upper()
+    model_cls = MLP if model_key == "MLP" else LSTM
+    if (
+        model_cache_path is not None
+        and (not force_retrain_model)
+        and os.path.exists(model_cache_path)
+    ):
+        try:
+            model = model_cls.load(model_cache_path)
+            print(f"Loaded pretrained low-frequency residual model: {model_cache_path}")
+        except Exception as ex:
+            print(
+                f"Pretrained low-frequency residual load failed ({model_cache_path}), retraining: {ex}"
+            )
+            model = None
+
+    if model is None:
+        model = _build_residual_model(
+            model_type=model_type,
+            input_size=1,
+            hidden_size=hidden_size,
+            learning_rate=learning_rate,
+        )
+        for _ in range(epochs):
+            for i in range(len(X)):
+                model.train_step(X[i], y[i])
+        trained_now = True
+        if trained_now and model_cache_path is not None and save_trained_model:
+            try:
+                model.save(model_cache_path)
+            except Exception as ex:
+                print(f"Low-frequency residual model save skipped ({model_cache_path}): {ex}")
 
     # Rolling residual forecasts
     history = list(residual_train_scaled)
@@ -309,7 +338,7 @@ def lstm_residual_forecast_rolling(
 
 
 # Function to forecast the ARIMA-LSTM model
-def forecast_arima_lstm_low_imf(series_train,series_test,res_seq_len=50,res_hidden_size=32,res_epochs=10,res_lr=5e-4,skip_lstm_if_iid=True,ljung_alpha=0.05,ljung_lags=10,adf_alpha=0.05,imf_label="IMF",res_model_type="LSTM",forecast_days_ahead=1,residual_target_step=1,output_horizon=1):
+def forecast_arima_lstm_low_imf(series_train,series_test,res_seq_len=50,res_hidden_size=32,res_epochs=10,res_lr=5e-4,skip_lstm_if_iid=True,ljung_alpha=0.05,ljung_lags=10,adf_alpha=0.05,imf_label="IMF",res_model_type="LSTM",forecast_days_ahead=1,residual_target_step=1,output_horizon=1,residual_model_cache_path=None,force_retrain_model=False,save_trained_model=True):
     series_train = np.asarray(series_train, dtype=float)
     series_test = np.asarray(series_test, dtype=float)
     horizon = len(series_test)
@@ -378,6 +407,9 @@ def forecast_arima_lstm_low_imf(series_train,series_test,res_seq_len=50,res_hidd
                 output_horizon=out_h,
                 return_horizon_matrix=True,
                 rollout_horizon=roll_h,
+                model_cache_path=residual_model_cache_path,
+                force_retrain_model=force_retrain_model,
+                save_trained_model=save_trained_model,
             )
         if skip_lstm_if_iid and iid_like:
             resid_hmat = np.zeros((horizon, roll_h), dtype=float)

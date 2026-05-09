@@ -251,6 +251,10 @@ def _cache_context_prefix():
 def _scoped_model_key(model_key):
     return f"{_cache_context_prefix()}__{model_key}"
 
+# Function to build a full scoped cache file path
+def _scoped_model_cache_path(model_key):
+    return _model_cache_path(_scoped_model_key(model_key))
+
 # Function to try to load the model
 def _try_load_model(model_cls, model_key):
     if FORCE_RETRAIN_MODELS:
@@ -468,15 +472,24 @@ def run_single_ticker(ticker):
     low_imf_outputs = {}
     for k in low_freq_indices:
         series_full = IMFs[k, close_idx, :]
+        low_res_cache_key = (
+            f"{ticker}_low_{str(RES_MODEL_TYPE).upper()}_imf{k}_sl{RES_SEQ_LEN}_"
+            f"ep{RES_EPOCHS}_h{RES_HIDDEN_SIZE}_lr{RES_LR}"
+        )
         out = forecast_arima_lstm_low_imf(series_train=series_full[train_slice],series_test=series_full[test_slice],res_seq_len=RES_SEQ_LEN,res_hidden_size=RES_HIDDEN_SIZE,res_epochs=RES_EPOCHS,
-            res_lr=RES_LR,res_model_type=RES_MODEL_TYPE,skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} low-IMF {k+1}",)
+            res_lr=RES_LR,res_model_type=RES_MODEL_TYPE,skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} low-IMF {k+1}",residual_model_cache_path=_scoped_model_cache_path(low_res_cache_key),force_retrain_model=FORCE_RETRAIN_MODELS,save_trained_model=SAVE_TRAINED_MODELS,)
         low_imf_forecasts[k] = out["combined"]
         low_imf_hmats[k] = np.asarray(out.get("combined_hmat", np.asarray(out["combined"], dtype=float).reshape(-1, 1)), dtype=float)
         low_imf_outputs[k] = out
 
     # Residual path: apply the same low-frequency ARIMA+residual-model stack on MEMD residue
     residue_full = np.asarray(residue[close_idx, :], dtype=float).ravel()
+    residue_hybrid_cache_key = (
+        f"{ticker}_low_{str(RES_MODEL_TYPE).upper()}_residue_hybrid_sl{RES_SEQ_LEN}_"
+        f"ep{RES_EPOCHS}_h{RES_HIDDEN_SIZE}_lr{RES_LR}"
+    )
     out_residual_hybrid = forecast_arima_lstm_low_imf(series_train=residue_full[train_slice],series_test=residue_full[test_slice],res_seq_len=RES_SEQ_LEN,res_hidden_size=RES_HIDDEN_SIZE,res_epochs=RES_EPOCHS,res_lr=RES_LR,res_model_type=RES_MODEL_TYPE,skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} residue (hybrid)",
+        residual_model_cache_path=_scoped_model_cache_path(residue_hybrid_cache_key),force_retrain_model=FORCE_RETRAIN_MODELS,save_trained_model=SAVE_TRAINED_MODELS,
     )
     residue_hybrid_forecast = np.asarray(out_residual_hybrid["combined"], dtype=float).ravel()
     residue_hybrid_hmat = np.asarray(
@@ -593,13 +606,21 @@ def run_single_ticker(ticker):
         low_imf_forecasts_mlp = {}
         for k in low_freq_indices:
             series_full = IMFs[k, close_idx, :]
+            low_mlp_cache_key = (
+                f"{ticker}_low_MLP_imf{k}_hybrid_sl{HYBRID_MLP_RES_SEQ_LEN}_"
+                f"ep{HYBRID_MLP_RES_EPOCHS}_h{HYBRID_MLP_RES_HIDDEN}_lr{HYBRID_MLP_RES_LR}"
+            )
             out_mlph = forecast_arima_lstm_low_imf(series_train=series_full[train_slice],series_test=series_full[test_slice],res_seq_len=HYBRID_MLP_RES_SEQ_LEN,res_hidden_size=HYBRID_MLP_RES_HIDDEN,res_epochs=HYBRID_MLP_RES_EPOCHS,
-                res_lr=HYBRID_MLP_RES_LR,res_model_type="MLP",skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} low-IMF {k+1} (MLP hybrid)",)
+                res_lr=HYBRID_MLP_RES_LR,res_model_type="MLP",skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} low-IMF {k+1} (MLP hybrid)",residual_model_cache_path=_scoped_model_cache_path(low_mlp_cache_key),force_retrain_model=FORCE_RETRAIN_MODELS,save_trained_model=SAVE_TRAINED_MODELS,)
             low_imf_forecasts_mlp[k] = out_mlph["combined"]
 
         # Residual path for MEMD-ARIMA-GARCH-MLP: same low-frequency stack but with MLP residual model
+        residue_mlp_cache_key = (
+            f"{ticker}_low_MLP_residue_hybrid_sl{HYBRID_MLP_RES_SEQ_LEN}_"
+            f"ep{HYBRID_MLP_RES_EPOCHS}_h{HYBRID_MLP_RES_HIDDEN}_lr{HYBRID_MLP_RES_LR}"
+        )
         out_residual_mlp = forecast_arima_lstm_low_imf(series_train=residue_full[train_slice],series_test=residue_full[test_slice],res_seq_len=HYBRID_MLP_RES_SEQ_LEN,res_hidden_size=HYBRID_MLP_RES_HIDDEN,res_epochs=HYBRID_MLP_RES_EPOCHS,
-            res_lr=HYBRID_MLP_RES_LR,res_model_type="MLP",skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} residue (MLP hybrid)",)
+            res_lr=HYBRID_MLP_RES_LR,res_model_type="MLP",skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} residue (MLP hybrid)",residual_model_cache_path=_scoped_model_cache_path(residue_mlp_cache_key),force_retrain_model=FORCE_RETRAIN_MODELS,save_trained_model=SAVE_TRAINED_MODELS,)
         residue_mlp_forecast = np.asarray(out_residual_mlp["combined"], dtype=float).ravel()
         if residue_mlp_forecast.size < horizon:
             _pad_v_m = float(residue_mlp_forecast[-1]) if residue_mlp_forecast.size > 0 else float(residue[close_idx, T_train - 1])
@@ -668,14 +689,22 @@ def run_single_ticker(ticker):
 
         # Residual path for MEMD ablations (so IMF-sum ablations also reconstruct with dynamic residue forecast)
         res_tail = float(residue[close_idx, T_train - 1])
-        out_residual_memd_lstm = forecast_arima_lstm_low_imf(series_train=residue_full[train_slice],series_test=residue_full[test_slice],res_seq_len=MEMD_LSTM_SEQ_LEN,res_hidden_size=MEMD_LSTM_HIDDEN,res_epochs=MEMD_LSTM_EPOCHS,res_lr=RES_LR,res_model_type="LSTM",skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} residue (MEMD-LSTM ablation)",)
+        residue_memd_lstm_cache_key = (
+            f"{ticker}_low_LSTM_residue_memd_ablation_sl{MEMD_LSTM_SEQ_LEN}_"
+            f"ep{MEMD_LSTM_EPOCHS}_h{MEMD_LSTM_HIDDEN}_lr{RES_LR}"
+        )
+        out_residual_memd_lstm = forecast_arima_lstm_low_imf(series_train=residue_full[train_slice],series_test=residue_full[test_slice],res_seq_len=MEMD_LSTM_SEQ_LEN,res_hidden_size=MEMD_LSTM_HIDDEN,res_epochs=MEMD_LSTM_EPOCHS,res_lr=RES_LR,res_model_type="LSTM",skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} residue (MEMD-LSTM ablation)",residual_model_cache_path=_scoped_model_cache_path(residue_memd_lstm_cache_key),force_retrain_model=FORCE_RETRAIN_MODELS,save_trained_model=SAVE_TRAINED_MODELS,)
         residue_memd_lstm_forecast = np.asarray(out_residual_memd_lstm["combined"], dtype=float).ravel()
         if residue_memd_lstm_forecast.size < horizon:
             _pad_rl = float(residue_memd_lstm_forecast[-1]) if residue_memd_lstm_forecast.size > 0 else res_tail
             residue_memd_lstm_forecast = np.concatenate([residue_memd_lstm_forecast, np.full(horizon - residue_memd_lstm_forecast.size, _pad_rl, dtype=float)])
 
+        residue_memd_mlp_cache_key = (
+            f"{ticker}_low_MLP_residue_memd_ablation_sl{MEMD_MLP_SEQ_LEN}_"
+            f"ep{MEMD_MLP_EPOCHS}_h{MEMD_MLP_HIDDEN}_lr{MEMD_MLP_LR}"
+        )
         out_residual_memd_mlp = forecast_arima_lstm_low_imf(series_train=residue_full[train_slice],series_test=residue_full[test_slice],res_seq_len=MEMD_MLP_SEQ_LEN,res_hidden_size=MEMD_MLP_HIDDEN,res_epochs=MEMD_MLP_EPOCHS,res_lr=MEMD_MLP_LR,
-            res_model_type="MLP",skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} residue (MEMD-MLP ablation)",)
+            res_model_type="MLP",skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} residue (MEMD-MLP ablation)",residual_model_cache_path=_scoped_model_cache_path(residue_memd_mlp_cache_key),force_retrain_model=FORCE_RETRAIN_MODELS,save_trained_model=SAVE_TRAINED_MODELS,)
         residue_memd_mlp_forecast = np.asarray(out_residual_memd_mlp["combined"], dtype=float).ravel()
 
         if residue_memd_mlp_forecast.size < horizon:
@@ -728,7 +757,11 @@ def run_single_ticker(ticker):
             ablation_garch_lstm_norm = preds_glc
 
         # ARIMA-LSTM ablation: same ARIMA+LSTM(residual) stack as low-IMF path, applied to raw Close (no IMF split)
-        out_arima_lstm_close = forecast_arima_lstm_low_imf(series_train=np.asarray(data_for_memd[close_idx, train_slice], dtype=float).ravel(),series_test=np.asarray(data_for_memd[close_idx, test_slice], dtype=float).ravel(),res_seq_len=RES_SEQ_LEN,res_hidden_size=RES_HIDDEN_SIZE,res_epochs=RES_EPOCHS,res_lr=RES_LR,res_model_type=RES_MODEL_TYPE,skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} close (ARIMA-LSTM ablation)",)
+        arima_lstm_close_cache_key = (
+            f"{ticker}_low_{str(RES_MODEL_TYPE).upper()}_close_arima_ablation_sl{RES_SEQ_LEN}_"
+            f"ep{RES_EPOCHS}_h{RES_HIDDEN_SIZE}_lr{RES_LR}"
+        )
+        out_arima_lstm_close = forecast_arima_lstm_low_imf(series_train=np.asarray(data_for_memd[close_idx, train_slice], dtype=float).ravel(),series_test=np.asarray(data_for_memd[close_idx, test_slice], dtype=float).ravel(),res_seq_len=RES_SEQ_LEN,res_hidden_size=RES_HIDDEN_SIZE,res_epochs=RES_EPOCHS,res_lr=RES_LR,res_model_type=RES_MODEL_TYPE,skip_lstm_if_iid=SKIP_LSTM_IF_IID,forecast_days_ahead=FORECAST_DAYS_AHEAD,residual_target_step=FORECAST_TRAIN_TARGET_STEP,output_horizon=FORECAST_OUTPUT_HORIZON,imf_label=f"{ticker} close (ARIMA-LSTM ablation)",residual_model_cache_path=_scoped_model_cache_path(arima_lstm_close_cache_key),force_retrain_model=FORCE_RETRAIN_MODELS,save_trained_model=SAVE_TRAINED_MODELS,)
         ablation_arima_lstm_norm = np.asarray(out_arima_lstm_close["combined"], dtype=float).ravel()
     else:
         print(f"{ticker}: skipping expensive ablation models (RQ1_ABLATION_TICKER={RQ1_ABLATION_TICKER}).")
