@@ -700,6 +700,77 @@ def rq2_memd_decomposition(time_index,original_series,imfs,residue,channel_label
         plt.close(fig)
 
 
+def rq2_memd_decomposition_tracers(
+    time_index,
+    original_series,
+    imfs,
+    residue,
+    channel_label="Close (normalized)",
+    imfs_channel_idx=0,
+    save_path=None,
+    show=True,
+):
+    """Single-axis MEMD figure: original, all IMFs, and residue overlaid (tracer-style)."""
+    orig = np.asarray(original_series, dtype=float).reshape(-1)
+    res = np.asarray(residue, dtype=float).reshape(-1)
+    im = np.asarray(imfs, dtype=float)
+    if im.ndim == 3:
+        im = im[:, int(imfs_channel_idx), :]
+    if im.ndim != 2:
+        raise ValueError("imfs must be 2D (n_imfs, n_samples) after channel selection.")
+    n_imfs, T = im.shape
+    if len(orig) != T or len(res) != T:
+        raise ValueError("original_series, residue, and IMF width must share length T.")
+
+    if time_index is None:
+        x_plot = np.arange(T)
+        xlab = "Time step"
+    else:
+        x_plot = np.asarray(time_index)
+        if len(x_plot) != T:
+            raise ValueError("time_index must match series length.")
+        xlab = "Date"
+
+    fig, ax = plt.subplots(figsize=(12, 4.8))
+    if n_imfs <= 10:
+        imf_colors = [f"C{i % 10}" for i in range(n_imfs)]
+    else:
+        imf_colors = plt.cm.viridis(np.linspace(0.12, 0.92, n_imfs))
+
+    for i in range(n_imfs):
+        ax.plot(
+            x_plot,
+            im[i],
+            linewidth=0.85,
+            alpha=0.88,
+            color=imf_colors[i],
+            label=f"IMF {i + 1}",
+            zorder=2 + i,
+        )
+    ax.plot(x_plot, res, color="tab:red", linewidth=1.35, label="Residue", zorder=50)
+    ax.plot(x_plot, orig, color="black", linewidth=1.45, label="Original", zorder=60)
+    ax.set_xlabel(xlab)
+    ax.set_ylabel("Value (normalized channel)")
+    ax.set_title(f"MEMD components overlaid — {channel_label}")
+    ax.grid(alpha=0.3)
+    ncol = 4 if n_imfs + 2 <= 16 else 5
+    ax.legend(
+        ncol=ncol,
+        fontsize=7.0,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.18),
+        frameon=True,
+    )
+    fig.suptitle("MEMD decomposition (divide-and-conquer): tracer overlay", fontsize=12, y=1.02)
+    fig.tight_layout(rect=[0, 0.06, 1, 0.98])
+    if save_path is not None:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
 # Function to plot the RQ2 ablation sequential heatmap
 def rq2_ablation_sequential_heatmap(models_ordered,metrics_by_model,title="Marginal contribution (sequential vs previous model)",save_path=None,show=True,):
     order = [m for m in models_ordered if m in metrics_by_model]
@@ -824,7 +895,7 @@ def markowitz_longonly_max_sharpe_weights(mu, Sigma, ridge_frac=1e-4):
 
 
 # Function to plot the RQ3 cumulative wealth curves
-def rq3_cumulative_wealth_curves(curves_by_name,x=None,title="Cumulative wealth (net portfolio value)",ylabel="Portfolio value ($)",save_path=None,show=True):
+def rq3_cumulative_wealth_curves(curves_by_name,x=None,title="Cumulative wealth (net portfolio value)",ylabel="Portfolio value ($)",ymax_cap=None,save_path=None,show=True):
     if not isinstance(curves_by_name, dict) or len(curves_by_name) == 0:
         raise ValueError("curves_by_name must be a non-empty dict.")
     series = {k: _as_1d(v, k) for k, v in curves_by_name.items()}
@@ -846,6 +917,10 @@ def rq3_cumulative_wealth_curves(curves_by_name,x=None,title="Cumulative wealth 
     for name, curve in series.items():
         c = thesis_color_for_strategy_label(name)
         ax.plot(x_plot, curve, label=name, color=c, linewidth=1.3, alpha=0.9)
+    if ymax_cap is not None:
+        y_cap = float(ymax_cap)
+        if np.isfinite(y_cap) and y_cap > 0.0:
+            ax.set_ylim(top=y_cap)
     ax.set_title(title)
     ax.set_xlabel(xlab)
     ax.set_ylabel(ylabel)
@@ -904,6 +979,66 @@ def rq3_bootstrap_terminal_profit_histogram(step_returns_by_strategy,initial_cas
     for j in range(len(names), len(axes)):
         axes[j].set_visible(False)
     fig.suptitle(title, fontsize=12)
+    fig.tight_layout()
+    if save_path is not None:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# Function to plot the RQ3 strategy summary table
+def rq3_strategy_summary_table(
+    curves_by_name,
+    step_returns_by_name=None,
+    ann_factor=252,
+    title="RQ3 strategy summary",
+    save_path=None,
+    show=True,
+):
+    if not isinstance(curves_by_name, dict) or len(curves_by_name) == 0:
+        raise ValueError("curves_by_name must be a non-empty dict.")
+    curves = {k: _as_1d(v, k) for k, v in curves_by_name.items()}
+
+    rows = []
+    for name, curve in curves.items():
+        if len(curve) < 2:
+            continue
+        start_v = float(curve[0])
+        end_v = float(curve[-1])
+        cum_ret = (end_v / max(start_v, 1e-12)) - 1.0
+        sharpe_txt = "--"
+        if isinstance(step_returns_by_name, dict) and name in step_returns_by_name:
+            sr = annualized_sharpe_step_returns(
+                step_returns_by_name[name],
+                ann_factor=ann_factor,
+            )
+            if np.isfinite(sr):
+                sharpe_txt = f"{float(sr):.3f}"
+        rows.append([
+            name,
+            f"{end_v:.2f}",
+            f"{100.0 * cum_ret:.2f}",
+            sharpe_txt,
+        ])
+
+    rows.sort(key=lambda r: float(r[2]), reverse=True)
+
+    fig_h = max(2.6, 0.5 + 0.42 * len(rows))
+    fig, ax = plt.subplots(figsize=(11, fig_h))
+    ax.axis("off")
+    tbl = ax.table(
+        cellText=rows,
+        colLabels=["Strategy", "Final value ($)", "Cumulative return (%)", "Ann. Sharpe"],
+        loc="center",
+        cellLoc="center",
+        colLoc="center",
+    )
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(9)
+    tbl.scale(1.0, 1.25)
+    ax.set_title(title)
     fig.tight_layout()
     if save_path is not None:
         fig.savefig(save_path, dpi=150, bbox_inches="tight")

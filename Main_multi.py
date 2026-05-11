@@ -33,16 +33,6 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)
 # Ticker list
 # ==============================
 ticker_list = [
-    "SPY",   # US large cap (S&P 500)
-    "VEA",   # Developed ex-US equity
-    "VWO",   # Emerging equity
-    "AGG",   # US aggregate bonds
-    "BNDX",  # International bonds
-    "VGIT",  # Intermediate US Treasuries
-    "VTIP",  # Short TIPS
-    "GLD",   # Gold
-    "VNQ",   # US REITs
-    "PDBC",  # Broad commodities 
     "AAPL",  # Tech
     "MSFT",  # Tech
     "NVDA",  # Semiconductors/AI
@@ -110,13 +100,18 @@ HF_USE_OBSERVED_WALK_FORWARD_UPDATE = True
 # MPC parameters
 # MPC_HORIZON is set above (independent of model output size).
 MPC_RISK_AVERSION = 0.5
-MPC_TRADE_COST = 0.05  # legacy alias, maps to impact_cost if MPC_IMPACT_COST is None
+MPC_TRADE_COST = 0.03  # legacy alias, maps to impact_cost if MPC_IMPACT_COST is None
 MPC_LINEAR_COST = 0.0005
+# Impact cost is the cost of each trade, it is the square of the trade size
 MPC_IMPACT_COST = None
-MPC_FIXED_TICKET_COST = 0.5
+# Fixed ticket cost is the cost of each ticket, it is the fixed cost of each ticket
+MPC_FIXED_TICKET_COST = 0.001
+# Fixed trade epsilon is the threshold for the fixed ticket cost
 MPC_FIXED_TRADE_EPS = 1e-3
-MPC_MAX_TURNOVER_L1 = None  # e.g. 0.8 to cap sum_i |Δw_i| per step; None = no cap
-MPC_MIN_TRADE_THRESHOLD = 1e-4
+# Max turnover l1 is the maximum turnover per step
+MPC_MAX_TURNOVER_L1 = 0.3  # e.g. 0.8 to cap sum_i |Δw_i| per step; None = no cap
+# Min trade threshold is the minimum trade size
+MPC_MIN_TRADE_THRESHOLD = 1e-3
 
 # RQ1 — forecasting accuracy: ARIMA, LSTM/MLP close-only, MEMD-LSTM/MLP, GARCH-LSTM, ARIMA-LSTM, MEMD-ARIMA-GARCH-MLP, hybrid
 RQ1_PLOTS = True
@@ -129,13 +124,13 @@ RQ1_SPA_BLOCK_LEN = 10
 RQ1_SPA_SEED = 42
 RQ1_TOP_SCATTER_MODELS = 3
 # LSTM (close only) parameters
-BASELINE_LSTM_SEQ_LEN = 100
+BASELINE_LSTM_SEQ_LEN = 80
 BASELINE_LSTM_EPOCHS = 40
 BASELINE_LSTM_HIDDEN = 128
 BASELINE_LSTM_LR = 1e-5
 
 # MEMD-LSTM ablation: walk-forward LSTM on each IMF (Close) then sum (+ residue forecast); lighter than baseline to limit runtime
-MEMD_LSTM_SEQ_LEN = 100
+MEMD_LSTM_SEQ_LEN = 80
 MEMD_LSTM_EPOCHS = 40
 MEMD_LSTM_HIDDEN = 128
 
@@ -178,14 +173,19 @@ RQ2_ABLATION_ORDER = (
 # MEMD residual diagnostics parameters
 RQ2_ACF_NLAGS = 40
 # Optional: export MEMD decomposition for all OHLCV channels for one ticker only
-RQ2_MEMD_ALL_CHANNELS_TICKER = "JPM"
+RQ2_MEMD_ALL_CHANNELS_TICKER = "AAPL"
 RQ2_MEMD_ALL_CHANNELS = True
+# Stacked MEMD panels ({ticker}_rq2_memd_decomposition.png) run for every ticker when RQ2_PLOTS.
+# Single-axis IMF tracers only for this ticker (None = never); e.g. AAPL_rq2_memd_decomposition_tracers.png
+RQ2_MEMD_IMF_TRACERS_TICKER = "AAPL"
 # Optional: one thesis figure for MEMD direction set (3D projection) for a single ticker
-RQ2_DIRECTION_PLOT_TICKER = "JPM"
+RQ2_DIRECTION_PLOT_TICKER = "AAPL"
 RQ2_DIRECTION_PLOT_3D = True
 
 # RQ3 — risk-adjusted portfolio performance (wealth curves, bootstrap)
 RQ3_PLOTS = True
+# Optional y-axis cap for RQ3 cumulative wealth plot (None disables cap).
+RQ3_YMAX_CAP = 8000.0
 # RQ3 bootstrap parameters
 RQ3_BOOTSTRAP_SIMS = 500
 RQ3_BOOTSTRAP_SEED = 42
@@ -1028,6 +1028,8 @@ def run_single_ticker(ticker):
         if RQ2_DIRECTION_PLOT_3D and str(ticker).upper() == str(RQ2_DIRECTION_PLOT_TICKER).upper():
             plot_direction_hypersphere_3d(n_channels=data_for_memd.shape[0],n_directions=MEMD_N_DIRECTIONS,project_dims=(0, 1, 2),show_interpolated_lines=True,title=f"{ticker}: MEMD direction vectors (3D projection)",save_path=_results_path(f"{ticker}_rq2_memd_direction_hypersphere_3d.png"),show=True,)
         evaluation_graphs.rq2_memd_decomposition(idx,data_for_memd[close_idx],IMFs,residue[close_idx],channel_label=f"{ticker} Close (normalized)",imfs_channel_idx=close_idx,save_path=_results_path(f"{ticker}_rq2_memd_decomposition.png"),show=True,)
+        if RQ2_MEMD_IMF_TRACERS_TICKER is not None and str(ticker).upper() == str(RQ2_MEMD_IMF_TRACERS_TICKER).upper():
+            evaluation_graphs.rq2_memd_decomposition_tracers(idx,data_for_memd[close_idx],IMFs,residue[close_idx],channel_label=f"{ticker} Close (normalized)",imfs_channel_idx=close_idx,save_path=_results_path(f"{ticker}_rq2_memd_decomposition_tracers.png"),show=True,)
         
         if RQ2_MEMD_ALL_CHANNELS and str(ticker).upper() == str(RQ2_MEMD_ALL_CHANNELS_TICKER).upper():
             for ch_idx, ch_name in enumerate(channel_names):
@@ -1327,7 +1329,7 @@ if __name__ == "__main__":
                     if mvo_curve is not None:
                         curves_rq3["Static Markowitz MVO"] = mvo_curve
                     # Plot the RQ3 cumulative wealth curves
-                    evaluation_graphs.rq3_cumulative_wealth_curves(curves_rq3,x=idx_port,title="RQ3: Cumulative wealth — MPC objective variants vs EW, B&H, static Markowitz",save_path=_results_path("rq3_cumulative_wealth.png"),show=True,)
+                    evaluation_graphs.rq3_cumulative_wealth_curves(curves_rq3,x=idx_port,title="RQ3: Cumulative wealth — MPC objective variants vs EW, B&H, static Markowitz",ymax_cap=RQ3_YMAX_CAP,save_path=_results_path("rq3_cumulative_wealth.png"),show=True,)
                     # Plot the RQ3 bootstrap terminal profit histogram
                     step_dict = {
                         "MPC (mean-variance utility)": port["dynamic_step_ret"],
@@ -1342,6 +1344,14 @@ if __name__ == "__main__":
                     mvo_step = port.get("markowitz_step_ret")
                     if mvo_step is not None:
                         step_dict["Static Markowitz MVO"] = mvo_step
+                    evaluation_graphs.rq3_strategy_summary_table(
+                        curves_by_name=curves_rq3,
+                        step_returns_by_name=step_dict,
+                        ann_factor=RQ4_ANN_FACTOR,
+                        title="RQ3: Strategy summary (final value and cumulative return)",
+                        save_path=_results_path("rq3_strategy_summary_table.png"),
+                        show=True,
+                    )
                     # Plot the RQ3 bootstrap terminal profit histogram
                     evaluation_graphs.rq3_bootstrap_terminal_profit_histogram(step_dict,initial_cash=MULTI_INITIAL_CASH,n_sims=RQ3_BOOTSTRAP_SIMS,random_seed=RQ3_BOOTSTRAP_SEED,save_path=_results_path("rq3_bootstrap_terminal_profit.png"),show=True,)
 
