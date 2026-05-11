@@ -33,6 +33,16 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)
 # Ticker list
 # ==============================
 ticker_list = [
+    "SPY",   # US large cap (S&P 500)
+    "VEA",   # Developed ex-US equity
+    "VWO",   # Emerging equity
+    "AGG",   # US aggregate bonds
+    "BNDX",  # International bonds
+    "VGIT",  # Intermediate US Treasuries
+    "VTIP",  # Short TIPS
+    "GLD",   # Gold
+    "VNQ",   # US REITs
+    "PDBC",  # Broad commodities 
     "AAPL",  # Tech
     "MSFT",  # Tech
     "NVDA",  # Semiconductors/AI
