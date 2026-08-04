@@ -17,4 +17,4 @@ The result is a holistic AI-driven investment framework where forecasting, uncer
 
 ## Framework
 
-![Pipeline](Hybrid Pipeline.drawio (1).png)
+![Pipeline](Hybrid_Pipeline.png)
