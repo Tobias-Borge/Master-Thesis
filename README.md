@@ -15,3 +15,7 @@ The complete pipeline was evaluated on historical market data across multiple st
 
 The result is a holistic AI-driven investment framework where forecasting, uncertainty estimation, and portfolio optimization operate as an integrated adaptive system rather than as separate stages.
 
+## Framework
+
+![Pipeline](Results/Hybrid Pipeline.drawio (1).png)
+.png)
