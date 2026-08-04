@@ -16,5 +16,27 @@ The complete pipeline was evaluated on historical market data across multiple st
 The result is a holistic AI-driven investment framework where forecasting, uncertainty estimation, and portfolio optimization operate as an integrated adaptive system rather than as separate stages.
 
 ## Framework
+The proposed framework consists of five stages:
+
+1. **MEMD**
+   - Decomposes multivariate OHLCV data into frequency-specific components.
+
+2. **ARIMA**
+   - Models long-term linear market behaviour.
+
+3. **GARCH**
+   - Estimates conditional volatility and market risk.
+
+4. **LSTM**
+   - Learns nonlinear temporal relationships and predicts future prices.
+
+5. **Model Predictive Control**
+   - Dynamically allocates portfolio weights under realistic investment constraints.
 
 ![Pipeline](Hybrid_Pipeline.png)
+
+## Results
+
+The hybrid framework was evaluated on 20 financial assets and compared against standalone statistical models, deep learning models, and other hybrid approaches.
+
+
