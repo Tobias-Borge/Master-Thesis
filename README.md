@@ -34,7 +34,7 @@ The proposed framework consists of five stages:
    - Dynamically allocates portfolio weights under realistic investment constraints.
   
 5. **Pipeline**
-   - ![Pipeline](Hybrid_Pipeline.png)
+   ![Pipeline](Hybrid_Pipeline.png)
 
 ## Results
 
