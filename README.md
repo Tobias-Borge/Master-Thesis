@@ -55,3 +55,10 @@ The hybrid framework was evaluated on 20 financial assets and compared against s
    - ![Portfolio_Allocation](results/multi_eval_allocation_mpc_sharpe_like_objective.png)
    - Terminal Wealth Optimization
    - ![Portfolio_Allocation](results/multi_eval_allocation_mpc_terminal_wealth.png)
+
+## Key Findings
+
+- Hybrid models consistently outperformed standalone models.
+- MEMD improved forecasting accuracy by separating market dynamics into frequency bands.
+- MPC successfully translated forecasts into adaptive portfolio allocations.
+- Including realistic transaction costs produced more robust investment strategies.
