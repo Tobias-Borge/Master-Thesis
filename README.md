@@ -39,4 +39,18 @@ The proposed framework consists of five stages:
 
 The hybrid framework was evaluated on 20 financial assets and compared against standalone statistical models, deep learning models, and other hybrid approaches.
 
+1. **Forecast vs Actual**
+   - Forecast tracking for Apple stock
+   - ![Forecasting](Results/AAPL_close_forecast_vs_actual.png)
 
+2. **Portfolio Growth**
+   - Comparing the different optimization methods to other strategies
+   - ![Portfolio_Growth](Results/rq3_cumulative_wealth.png)
+
+3. **Portfolio Allocation**
+   - Mean-Variance utility Optimization
+   - ![Portfolio_Allocation](Results/multi_eval_allocation_mpc_mean_variance_utility.png)
+   - Sharpe Ratio Optimization
+   - ![Portfolio_Allocation](Results/multi_eval_allocation_mpc_sharpe_like_objective.png)
+   - Terminal Wealth Optimization
+   - ![Portfolio_Allocation](Results/multi_eval_allocation_mpc_terminal_wealth.png)
