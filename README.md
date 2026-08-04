@@ -32,8 +32,9 @@ The proposed framework consists of five stages:
 
 5. **Model Predictive Control**
    - Dynamically allocates portfolio weights under realistic investment constraints.
-
-![Pipeline](Hybrid_Pipeline.png)
+  
+5. **Pipeline**
+   - ![Pipeline](Hybrid_Pipeline.png)
 
 ## Results
 
